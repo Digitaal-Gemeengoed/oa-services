@@ -210,10 +210,11 @@ export function lees(html: string): Kaart {
 /* ---------- eigen patronen: adressen ---------- */
 
 // Een straatnaam begint met een hoofdletter; daarna mogen tussenvoegsels ("Burgemeester van Reenensingel 5").
+// Witruimte zonder regeleinde: een adres loopt niet door in de volgende cel of alinea.
 const STRAAT =
-  /\b(?:[A-Z][\p{L}'.-]*\s(?:(?:van|de|der|den|het|ter|te|aan|[A-Z][\p{L}'.-]*)\s){0,3})?[A-Z][\p{L}'-]*(?:straat|weg|laan|plein|gracht|kade|dijk|singel|pad|steeg|hof|dreef|baan|park|markt|wal|veld|plantsoen|boulevard|burgwal|dam|haven|kwartier|ring|erf|hoek|zijde|straatweg)\s+\d{1,5}(?:\s?[a-zA-Z]\b|\s?-\s?\d{1,4}\b|\s(?:hs|bis|rd|zw)\b)?/gu;
+  /\b(?:[A-Z][\p{L}'.-]*[^\S\n](?:(?:van|de|der|den|het|ter|te|aan|[A-Z][\p{L}'.-]*)[^\S\n]){0,3})?[A-Z][\p{L}'-]*(?:straat|weg|laan|plein|gracht|kade|dijk|singel|pad|steeg|hof|dreef|baan|park|markt|wal|veld|plantsoen|boulevard|burgwal|dam|haven|kwartier|ring|erf|hoek|zijde|straatweg)[^\S\n]+\d{1,5}(?:[^\S\n]?[a-zA-Z]\b|[^\S\n]?-[^\S\n]?\d{1,4}\b|[^\S\n](?:hs|bis|rd|zw)\b)?/gu;
 // Ook SA, SD en SS (die PostNL niet uitgeeft): liever een treffer te veel dan een tikfout gemist.
-const POSTCODE = /\b[1-9]\d{3}\s?[A-Z]{2}\b(?:\s+[A-Z][\p{L}'-]+(?:\s(?:aan\s(?:den|de|zee)|[A-Z][\p{L}'-]+))?)?/gu;
+const POSTCODE = /\b[1-9]\d{3}[^\S\n]?[A-Z]{2}\b(?:[^\S\n]+[A-Z][\p{L}'-]+(?:[^\S\n](?:aan[^\S\n](?:den|de|zee)|[A-Z][\p{L}'-]+))?)?/gu;
 const AANHEF = /^(?:(?:de\s)?(?:heer|mevrouw|meneer|mevr\.?|dhr\.?|mr\.?|dr\.?|drs\.?|ing\.?|ir\.?|prof\.?)\s+)+/i;
 
 /* ---------- eigen patronen: BSN en geboortedatum ---------- */

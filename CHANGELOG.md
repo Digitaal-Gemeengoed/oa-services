@@ -1,5 +1,9 @@
 # Wijzigingen
 
+## 0.6.1 — 2026-11-18
+
+- Een adres (straat met huisnummer, postcode met plaats) loopt niet meer door in de volgende cel of alinea. In een rekenblad werd bijvoorbeeld de woonplaats "Spaarnedijk" met het telefoonnummer in de cel ernaast als straat met huisnummer gezien.
+
 ## 0.6.0 — 2026-11-18
 
 Anonimiseren vindt meer, vooral in tabellen en rekenbladen.
