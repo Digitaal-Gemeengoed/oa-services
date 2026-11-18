@@ -22,7 +22,7 @@ type TextNode = DefaultTreeAdapterMap["textNode"];
  * over twee alinea's loopt. Elke treffer krijgt de plek van zijn blok.
  */
 
-export const STANDAARD: PiiSoort[] = ["naam", "adres", "bsn", "iban", "telefoon", "e-mail", "kenteken", "zaaknummer"];
+export const STANDAARD: PiiSoort[] = ["naam", "adres", "bsn", "iban", "telefoon", "e-mail", "kenteken", "zaaknummer", "geboortedatum"];
 
 const VAN_MOTOR: Record<string, PiiSoort> = {
   PERSON: "naam",
@@ -63,7 +63,7 @@ interface Kaart {
   wortel: DefaultTreeAdapterMap["documentFragment"];
   tekst: string;
   stukken: Stuk[];
-  blokken: { begin: number; eind: number; plek: Plek }[];
+  blokken: { begin: number; eind: number; plek: Plek; kolom?: PiiSoort }[];
 }
 
 const OMSCHRIJVING: Record<string, string> = {
@@ -80,30 +80,99 @@ const OMSCHRIJVING: Record<string, string> = {
   figcaption: "Bijschrift",
 };
 
+/* ---------- tabellen: de soort van een kolom uit de kop ---------- */
+
+/**
+ * Kolomkoppen die zeggen wat er in de kolom staat. In een tabel of een
+ * rekenblad staat een achternaam ("Bos", "Visser") los in een cel; zonder zin
+ * eromheen herkent het taalmodel hem niet. Onder zo'n kop is elke cel dat
+ * persoonsgegeven. Een vaste lijst, zodat een kop als "Naam document" of
+ * "Projectnaam" niet een hele kolom laat afschermen.
+ */
+const KOLOMKOPPEN: [RegExp, PiiSoort][] = [
+  [/^(?:geboorte\s*datum|geb\.?\s*datum|geboren(?:\s+op)?|datum\s+van\s+geboorte)$/, "geboortedatum"],
+  [/^(?:bsn|burgerservicenummer|sofinummer|sofi-nummer)$/, "bsn"],
+  [/^(?:(?:volledige\s+)?naam|achternaam|voornaam|voornamen|voorletters?|roepnaam|tussenvoegsels?|geslachtsnaam|naam\s+(?:aanvrager|indiener|betrokkene|klant|cli[eë]nt|melder|bezwaarmaker|klager|bewoner|eigenaar|contactpersoon|medewerker|behandelaar))$/, "naam"],
+  [/^(?:adres|woonadres|correspondentieadres|postadres|straat|straatnaam|straat\s+en\s+huisnummer|postcode)$/, "adres"],
+  [/^(?:woonplaats|geboorteplaats|plaats)$/, "plaats"],
+  [/^(?:telefoon|telefoonnummer|tel\.?|mobiel|mobiel\s+nummer|gsm)$/, "telefoon"],
+  [/^(?:e-?mail|e-?mailadres)$/, "e-mail"],
+  [/^(?:iban|rekeningnummer|bankrekening(?:nummer)?)$/, "iban"],
+  [/^kenteken$/, "kenteken"],
+];
+
+function kopsoort(tekst: string): PiiSoort | undefined {
+  // "Volledige naam (formule)" → "volledige naam"
+  const k = tekst.toLowerCase().replace(/\(.*?\)/g, "").replace(/[:*]/g, "").replace(/\s+/g, " ").trim();
+  if (!k || k.length > 40) return undefined;
+  return KOLOMKOPPEN.find(([re]) => re.test(k))?.[1];
+}
+
+function tekstVan(n: Node): string {
+  if (n.nodeName === "#text") return (n as TextNode).value;
+  return isElement(n) ? n.childNodes.map(tekstVan).join("") : "";
+}
+
+function kinderen(n: Node, tag: string, binnen: Set<string>): Element[] {
+  const uit: Element[] = [];
+  if (!isElement(n)) return uit;
+  for (const k of n.childNodes) {
+    if (!isElement(k)) continue;
+    if (k.tagName === tag) uit.push(k);
+    else if (binnen.has(k.tagName)) uit.push(...kinderen(k, tag, binnen));
+  }
+  return uit;
+}
+
+/**
+ * Per cel de soort van zijn kolom. De koprij is de eerste rij (van de eerste
+ * vijf) met minstens één bekende kop: een rekenblad begint soms met een titel.
+ */
+function kolomsoorten(wortel: Node): Map<Node, PiiSoort> {
+  const uit = new Map<Node, PiiSoort>();
+  const loop = (n: Node) => {
+    if (!isElement(n) && n.nodeName !== "#document-fragment") return;
+    for (const k of (n as ParentNode).childNodes) {
+      if (isElement(k) && k.tagName === "table") {
+        const rijen = kinderen(k, "tr", new Set(["thead", "tbody", "tfoot"])).map((r) => r.childNodes.filter((c): c is Element => isElement(c) && (c.tagName === "td" || c.tagName === "th")));
+        const kop = rijen.slice(0, 5).findIndex((r) => r.some((c) => kopsoort(tekstVan(c))));
+        if (kop >= 0) {
+          const soorten = rijen[kop].map((c) => kopsoort(tekstVan(c)));
+          for (const rij of rijen.slice(kop + 1)) rij.forEach((c, i) => soorten[i] && uit.set(c, soorten[i]!));
+        }
+      }
+      loop(k);
+    }
+  };
+  loop(wortel);
+  return uit;
+}
+
 /** De platte tekst van de html, met waar elk tekststuk en elk blok staat. */
 export function lees(html: string): Kaart {
   const wortel = parseFragment(html);
   const stukken: Stuk[] = [];
   const blokken: Kaart["blokken"] = [];
   let tekst = "";
-  let huidig: { pad: string; tag: string; begin: number } | null = null;
+  let huidig: { pad: string; tag: string; begin: number; kolom?: PiiSoort } | null = null;
   let alinea = 0;
+  const kolomVan = kolomsoorten(wortel);
 
   const sluit = () => {
     if (!huidig) return;
     const inhoud = tekst.slice(huidig.begin);
     if (inhoud.trim()) {
       const n = huidig.tag === "p" ? `Alinea ${++alinea}` : (OMSCHRIJVING[huidig.tag] ?? "Tekst");
-      blokken.push({ begin: huidig.begin, eind: tekst.length, plek: { pad: huidig.pad, beschrijving: n } });
+      blokken.push({ begin: huidig.begin, eind: tekst.length, plek: { pad: huidig.pad, beschrijving: n }, ...(huidig.kolom ? { kolom: huidig.kolom } : {}) });
     } else {
       tekst = tekst.slice(0, huidig.begin);
     }
     huidig = null;
   };
-  const open = (pad: string, tag: string) => {
+  const open = (pad: string, tag: string, kolom?: PiiSoort) => {
     sluit();
     if (tekst.length) tekst += "\n\n";
-    huidig = { pad, tag, begin: tekst.length };
+    huidig = { pad, tag, begin: tekst.length, ...(kolom ? { kolom } : {}) };
   };
 
   const loop = (ouder: ParentNode, pad: string, inBlok: boolean): void => {
@@ -117,7 +186,7 @@ export function lees(html: string): Kaart {
           continue;
         }
         const blok = !inBlok && BLOK.has(n.tagName);
-        if (blok) open(p, n.tagName);
+        if (blok) open(p, n.tagName, kolomVan.get(n));
         loop(n, p, inBlok || blok);
         if (blok) sluit();
       } else if (n.nodeName === "#text") {
@@ -143,8 +212,28 @@ export function lees(html: string): Kaart {
 // Een straatnaam begint met een hoofdletter; daarna mogen tussenvoegsels ("Burgemeester van Reenensingel 5").
 const STRAAT =
   /\b(?:[A-Z][\p{L}'.-]*\s(?:(?:van|de|der|den|het|ter|te|aan|[A-Z][\p{L}'.-]*)\s){0,3})?[A-Z][\p{L}'-]*(?:straat|weg|laan|plein|gracht|kade|dijk|singel|pad|steeg|hof|dreef|baan|park|markt|wal|veld|plantsoen|boulevard|burgwal|dam|haven|kwartier|ring|erf|hoek|zijde|straatweg)\s+\d{1,5}(?:\s?[a-zA-Z]\b|\s?-\s?\d{1,4}\b|\s(?:hs|bis|rd|zw)\b)?/gu;
-const POSTCODE = /\b[1-9]\d{3}\s?(?!SA|SD|SS)[A-Z]{2}\b(?:\s+[A-Z][\p{L}'-]+(?:\s(?:aan\s(?:den|de|zee)|[A-Z][\p{L}'-]+))?)?/gu;
+// Ook SA, SD en SS (die PostNL niet uitgeeft): liever een treffer te veel dan een tikfout gemist.
+const POSTCODE = /\b[1-9]\d{3}\s?[A-Z]{2}\b(?:\s+[A-Z][\p{L}'-]+(?:\s(?:aan\s(?:den|de|zee)|[A-Z][\p{L}'-]+))?)?/gu;
 const AANHEF = /^(?:(?:de\s)?(?:heer|mevrouw|meneer|mevr\.?|dhr\.?|mr\.?|dr\.?|drs\.?|ing\.?|ir\.?|prof\.?)\s+)+/i;
+
+/* ---------- eigen patronen: BSN en geboortedatum ---------- */
+
+// Negen cijfers, ook in de schrijfwijze 1234.56.789 of 123 456 789.
+const BSN = /(?<![\d.,-])(?:\d{4}\.\d{2}\.\d{3}|\d{3}[ .]\d{3}[ .]\d{3}|\d{9})(?![\d.,-]?\d)/g;
+
+/** De elfproef van het BSN. */
+export function elfproef(cijfers: string): boolean {
+  if (!/^\d{9}$/.test(cijfers) || /^0+$/.test(cijfers)) return false;
+  let som = 0;
+  for (let i = 0; i < 8; i++) som += (9 - i) * Number(cijfers[i]);
+  return (som - Number(cijfers[8])) % 11 === 0;
+}
+
+const MAAND = "januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|jun|jul|aug|sep|sept|okt|nov|dec";
+const DATUM = `(?:\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\s+(?:${MAAND})\\.?\\s+\\d{4})`;
+/** "geboren op 4 november 1946", "geboortedatum: 04-11-1946", "geb. 04-11-1946": alleen de datum. */
+const GEBOREN = new RegExp(`\\b(?:geboren(?:\\s+op)?|geboortedatum|geb\\.(?:\\s*datum)?)\\s*:?\\s*(${DATUM})`, "giu");
+const HELE_DATUM = new RegExp(`^${DATUM}$`, "iu");
 
 interface Ruw {
   soort: PiiSoort;
@@ -166,7 +255,77 @@ export function eigenPatronen(tekst: string): Ruw[] {
     if (vorige && /^[\s,]*$/.test(tekst.slice(vorige.eind, r.begin)) && !tekst.slice(vorige.eind, r.begin).includes("\n")) vorige.eind = Math.max(vorige.eind, r.eind);
     else samen.push({ ...r });
   }
+  for (const m of tekst.matchAll(BSN)) {
+    if (elfproef(m[0].replace(/\D/g, ""))) samen.push({ soort: "bsn", begin: m.index!, eind: m.index! + m[0].length, score: 0.9, bron: "patroon" });
+  }
+  for (const m of tekst.matchAll(GEBOREN)) {
+    const begin = m.index! + m[0].length - m[1].length;
+    samen.push({ soort: "geboortedatum", begin, eind: begin + m[1].length, score: 0.95, bron: "patroon" });
+  }
   return samen;
+}
+
+// Een plaatshouder die er al staat ("[PERSOON 3]"): niet opnieuw afschermen.
+const AL_AFGESCHERMD = /\[[A-Z][A-Z-]* \d+\]/g;
+
+/**
+ * Cellen in een kolom met een bekende kop (zie KOLOMKOPPEN): de hele cel is
+ * dat persoonsgegeven. Staan er al plaatshouders in, dan de stukken ertussen.
+ */
+export function kolomtreffers(tekst: string, blokken: Kaart["blokken"]): Ruw[] {
+  const uit: Ruw[] = [];
+  for (const b of blokken) {
+    if (!b.kolom) continue;
+    const cel = tekst.slice(b.begin, b.eind);
+    let vanaf = 0;
+    const stukken: [number, number][] = [];
+    for (const m of cel.matchAll(AL_AFGESCHERMD)) {
+      stukken.push([vanaf, m.index!]);
+      vanaf = m.index! + m[0].length;
+    }
+    stukken.push([vanaf, cel.length]);
+    for (let [s, e] of stukken) {
+      while (s < e && /[\s,;]/.test(cel[s])) s++;
+      while (e > s && /[\s,;]/.test(cel[e - 1])) e--;
+      const stuk = cel.slice(s, e);
+      if (!/[\p{L}\d]/u.test(stuk) || /^(?:-|n\.?v\.?t\.?|onbekend|geen)$/i.test(stuk)) continue;
+      // Een datumkolom: alleen als het echt een datum is (geen "zie bijlage").
+      if (b.kolom === "geboortedatum" && !HELE_DATUM.test(stuk)) continue;
+      if (b.kolom === "bsn" && !elfproef(stuk.replace(/\D/g, ""))) continue;
+      uit.push({ soort: b.kolom, begin: b.begin + s, eind: b.begin + e, score: 0.95, bron: "patroon" });
+    }
+  }
+  return uit;
+}
+
+// Wat één keer gevonden is, staat elders ook: "Bakker" onder Achternaam, en in "B. Bakker" verderop.
+const DOORZETTEN = new Set<PiiSoort>(["naam", "adres", "bsn", "iban", "telefoon", "e-mail", "kenteken", "geboortedatum", "zaaknummer"]);
+
+/**
+ * Elke gevonden waarde ook op de andere plekken waar hij letterlijk staat
+ * (als heel woord, hoofdlettergevoelig), als daar nog niets gevonden is.
+ */
+export function doorzetten(tekst: string, gekozen: Ruw[]): Ruw[] {
+  const waarden = new Map<string, Ruw>();
+  for (const r of gekozen) {
+    const w = tekst.slice(r.begin, r.eind);
+    if (!DOORZETTEN.has(r.soort) || w.length < 3 || w.includes("\n")) continue;
+    // Een naam moet met een hoofdletter beginnen ("de" of "van" alleen doorzetten is te veel).
+    if (r.soort === "naam" && !/^\p{Lu}/u.test(w)) continue;
+    if (!waarden.has(w)) waarden.set(w, r);
+  }
+  const extra: Ruw[] = [];
+  const bezet = (b: number, e: number) => [...gekozen, ...extra].some((g) => b < g.eind && g.begin < e);
+  // Langste waarde eerst: "Jan de Vries" vóór "Vries".
+  for (const [w, r] of [...waarden].sort((a, b) => b[0].length - a[0].length)) {
+    const re = new RegExp(`(?<![\\p{L}\\d])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\d])`, "gu");
+    for (const m of tekst.matchAll(re)) {
+      const b = m.index!;
+      const e = b + w.length;
+      if (!bezet(b, e)) extra.push({ soort: r.soort, begin: b, eind: e, score: Math.min(r.score, 0.8), bron: r.bron });
+    }
+  }
+  return [...gekozen, ...extra].sort((a, b) => a.begin - b.begin);
 }
 
 /** Opschonen: aanhef uit namen, witruimte eraf, niet over een blokgrens, overlap weg (langste en zekerste wint). */
@@ -230,12 +389,13 @@ export async function analyseer(html: string, motor: Motor): Promise<Anonimiseer
   const ruw: Ruw[] = [
     ...model.filter((m) => VAN_MOTOR[m.type]).map((m) => ({ soort: VAN_MOTOR[m.type], begin: m.begin, eind: m.eind, score: m.score, bron: "model" as const })),
     ...eigenPatronen(kaart.tekst),
+    ...kolomtreffers(kaart.tekst, kaart.blokken),
   ];
-  const treffers: Treffer[] = schoon(kaart.tekst, ruw).map((r, i) => {
+  const treffers: Treffer[] = doorzetten(kaart.tekst, schoon(kaart.tekst, ruw)).map((r, i) => {
     const blok = kaart.blokken.find((b) => r.begin >= b.begin && r.begin < b.eind);
     return { id: `pii-${i + 1}`, soort: r.soort, tekst: kaart.tekst.slice(r.begin, r.eind), begin: r.begin, eind: r.eind, score: r.score, bron: r.bron, ...(blok ? { plek: blok.plek } : {}) };
   });
-  return { tekst: kaart.tekst, blokken: kaart.blokken, treffers, standaard: STANDAARD, motor: motor.naam };
+  return { tekst: kaart.tekst, blokken: kaart.blokken.map(({ begin, eind, plek }) => ({ begin, eind, plek })), treffers, standaard: STANDAARD, motor: motor.naam };
 }
 
 /**

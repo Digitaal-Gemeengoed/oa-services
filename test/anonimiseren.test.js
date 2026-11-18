@@ -3,7 +3,7 @@
 // OPENANONYMISER_TEST_URL draait er ook een test tegen een echte OpenAnonymiser.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyseer, lees, pasToe, openAnonymiser } from "../dist/anonimiseren.js";
+import { analyseer, lees, pasToe, openAnonymiser, elfproef } from "../dist/anonimiseren.js";
 import { bouwServer } from "../dist/server.js";
 
 const HTML =
@@ -58,6 +58,51 @@ test("treffers: aanhef eraf, adres erbij, overlap en witruimte weg", async () =>
   );
   assert.equal(a.treffers[0].plek.pad, "body/1");
   assert.ok(a.standaard.includes("adres") && !a.standaard.includes("datum"));
+});
+
+const leeg = { naam: "leeg", async analyseer() { return []; } };
+
+test("BSN met puntjes of spaties, alleen met de elfproef; postcode ook met SD", async () => {
+  assert.equal(elfproef("688746305"), true);
+  assert.equal(elfproef("688746306"), false);
+  const a = await analyseer("<p>BSN 6887.46.305, oud 688 746 305, fout 6887.46.306, rekening 1234.56.789,00. Postcode 2071 SD Duinmeer.</p>", leeg);
+  assert.deepEqual(a.treffers.map((t) => [t.soort, t.tekst]), [
+    ["bsn", "6887.46.305"],
+    ["bsn", "688 746 305"],
+    ["adres", "2071 SD Duinmeer"],
+  ]);
+});
+
+test("geboortedatum uit de zin; staat standaard aan", async () => {
+  const a = await analyseer("<p>Mevrouw is geboren op 4 november 1946 en diende op 12-03-2026 bezwaar in. Geb. datum: 04-11-1946.</p>", leeg);
+  assert.deepEqual(a.treffers.map((t) => [t.soort, t.tekst]), [
+    ["geboortedatum", "4 november 1946"],
+    ["geboortedatum", "04-11-1946"],
+  ]);
+  assert.ok(a.standaard.includes("geboortedatum"));
+});
+
+test("tabel: de kop zegt wat er in de kolom staat; plaatshouders blijven staan; wat gevonden is, staat elders ook", async () => {
+  const html =
+    "<h2>Bezwaren</h2><table><tbody>" +
+    "<tr><td>Register 2026</td><td></td><td></td><td></td><td></td></tr>" + // titelrij
+    "<tr><td>Voorletters</td><td>Achternaam</td><td>Volledige naam (formule)</td><td>Geboortedatum</td><td>Naam document</td></tr>" +
+    "<tr><td>B. de</td><td>Graaf</td><td>[PERSOON 3] Graaf</td><td>24-10-2007</td><td>Bezwaarschrift</td></tr>" +
+    "<tr><td>-</td><td>Bos</td><td>A. Bos</td><td>zie bijlage</td><td>Besluit</td></tr>" +
+    "</tbody></table><p>Volgens Graaf en mevrouw Bos is dat zo. Het bos is mooi.</p>";
+  const a = await analyseer(html, leeg);
+  assert.deepEqual(a.treffers.map((t) => [t.soort, t.tekst]), [
+    ["naam", "B. de"],
+    ["naam", "Graaf"],
+    ["naam", "Graaf"], // naast de plaatshouder
+    ["geboortedatum", "24-10-2007"],
+    ["naam", "Bos"],
+    ["naam", "A. Bos"],
+    ["naam", "Graaf"], // doorgezet in de alinea
+    ["naam", "Bos"], // idem; "bos" met een kleine letter niet
+  ]);
+  // De blokken in het antwoord houden zich aan het contract.
+  assert.ok(a.blokken.every((b) => Object.keys(b).sort().join() === "begin,eind,plek"));
 });
 
 test("afschermen: ook over opmaak heen; de opmaak blijft", async () => {

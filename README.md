@@ -27,11 +27,17 @@ Alleen de integratielaag mag de dienst aanroepen (gedeelde dienstsleutel).
 
 `POST /anonimiseren` zoekt persoonsgegevens in een html-document. Het antwoord bevat de platte tekst (per blok, gescheiden door een lege regel), waar elk blok in het document staat, en de treffers: soort, tekst, positie, zekerheid en bron (model of patroon). `POST /anonimiseren/toepassen` krijgt de treffers die de medewerker heeft gekozen en geeft de html terug met die gegevens vervangen door `[naam]`, `[adres]`, `[BSN]` enzovoort, met de opmaak intact. Vastleggen doet het platform, na bevestiging.
 
-De herkenning komt van [OpenAnonymiser](https://github.com/ConductionNL/anonymiq-light) van Conduction (EUPL-1.2): Presidio met spaCy `nl_core_news_lg` en Nederlandse patronen. Deze dienst roept het aan op `OPENANONYMISER_URL` en voegt eigen patronen voor adressen toe, haalt de aanhef uit namen en ruimt overlap op.
+De herkenning komt van [OpenAnonymiser](https://github.com/ConductionNL/anonymiq-light) van Conduction (EUPL-1.2): Presidio met spaCy `nl_core_news_lg` en Nederlandse patronen. Deze dienst roept het aan op `OPENANONYMISER_URL` en vult aan wat een taalmodel op losse cellen en notaties mist:
+
+- **Eigen patronen**: adressen (straat met huisnummer, postcode met plaats, ook met de letters SA, SD en SS), het BSN in elke schrijfwijze (`123456782`, `1234.56.782`, `123 456 782`) maar alleen als de elfproef klopt, en een geboortedatum na "geboren op", "geboortedatum" of "geb.".
+- **Kolomkoppen**: in een tabel of rekenblad is elke cel onder een bekende kop dat persoonsgegeven, ook een losse achternaam als "Bos". De koprij is de eerste rij (van de eerste vijf) met zo'n kop. Bekende koppen: (volledige) naam, achternaam, voornaam, voorletters, tussenvoegsel, naam aanvrager/indiener/klant…; BSN; geboortedatum; adres, straat, postcode; woonplaats; telefoon; e-mail; IBAN, rekeningnummer; kenteken. Een kop als "Naam document" of "Projectnaam" telt niet. Staan er in een cel al plaatshouders, dan alleen de stukken ertussen.
+- **Doorzetten**: een gevonden waarde wordt ook voorgesteld op elke andere plek waar hij letterlijk staat (heel woord, hoofdlettergevoelig), bijvoorbeeld een achternaam uit de kolom in een alinea verderop.
+
+Verder haalt de dienst de aanhef uit namen en ruimt overlap op.
 
 | Soort | Standaard afgeschermd |
 |---|---|
-| naam, adres, BSN, IBAN, telefoon, e-mail, kenteken, zaaknummer | ja |
+| naam, adres, BSN, IBAN, telefoon, e-mail, kenteken, zaaknummer, geboortedatum | ja |
 | plaats, organisatie, datum, documentnummer, rijbewijs, KvK, btw, IP-adres | nee (de medewerker kan ze aanzetten) |
 
 ## Gebruik

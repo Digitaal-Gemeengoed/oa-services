@@ -1,5 +1,16 @@
 # Wijzigingen
 
+## 0.6.0 — 2026-11-18
+
+Anonimiseren vindt meer, vooral in tabellen en rekenbladen.
+
+- **Kolomkoppen.** Onder een bekende kop (Achternaam, Voorletters, Naam, BSN, Geboortedatum, Adres, Postcode, Woonplaats, Telefoon, E-mail, IBAN, Kenteken…) is elke cel dat persoonsgegeven, ook een losse achternaam die het taalmodel zonder zin niet herkent.
+- **Doorzetten.** Een gevonden waarde wordt ook voorgesteld op de andere plekken waar hij letterlijk staat.
+- **BSN** in elke schrijfwijze (`1234.56.782`, `123 456 782`), alleen met een geldige elfproef.
+- **Postcodes** met SA, SD of SS worden niet meer overgeslagen.
+- **Geboortedatum**: na "geboren op", "geboortedatum" of "geb.", en in een kolom Geboortedatum. Staat standaard aan.
+- Gemeten op een nagebouwd register van 120 rijen (verzonnen gegevens): achternamen 0 → 120, volledige namen 0 → 120, BSN 60 → 120, geboortedata 0 → 120, postcodes 72 → 120, voorletters 80 → 120, adressen 90 → 120.
+
 ## 0.5.4 — 2026-11-10
 
 Hangt af van oa-contract 0.8.0; verder niets veranderd.
