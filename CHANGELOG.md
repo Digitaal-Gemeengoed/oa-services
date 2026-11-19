@@ -1,5 +1,9 @@
 # Wijzigingen
 
+## 0.6.3 — 2026-11-19
+
+- oa-contract 0.10.0.
+
 ## 0.6.2 — 2026-11-19
 
 - Hangt af van oa-contract 0.9.0 (geen wijziging in de diensten zelf).
