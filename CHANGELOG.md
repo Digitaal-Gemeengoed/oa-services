@@ -1,5 +1,9 @@
 # Wijzigingen
 
+## 0.6.2 — 2026-11-19
+
+- Hangt af van oa-contract 0.9.0 (geen wijziging in de diensten zelf).
+
 ## 0.6.1 — 2026-11-18
 
 - Een adres (straat met huisnummer, postcode met plaats) loopt niet meer door in de volgende cel of alinea. In een rekenblad werd bijvoorbeeld de woonplaats "Spaarnedijk" met het telefoonnummer in de cel ernaast als straat met huisnummer gezien.
