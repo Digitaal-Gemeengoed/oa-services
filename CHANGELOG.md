@@ -1,5 +1,9 @@
 # Wijzigingen
 
+## 0.6.4 — 2026-11-19
+
+- oa-contract 0.11.0.
+
 ## 0.6.3 — 2026-11-19
 
 - oa-contract 0.10.0.
