@@ -49,7 +49,7 @@ Hangt af van oa-contract 0.5.0 (metadatamodellen); verder niets veranderd.
 
 ## 0.5.0 — 2026-11-09
 
-**Toegankelijkheid van het bestand zelf** via [oa-wcag](https://github.com/digitaalgemeengoed/oa-wcag) (34 controles voor docx, xlsx en pptx): titel en taal, contrast, tekstafstand, leesvolgorde en titels van dia's, alt-tekst van grafieken en groepen, tabellen, lijsten, formuliervelden.
+**Toegankelijkheid van het bestand zelf** via [oa-wcag](https://github.com/Digitaal-Gemeengoed/oa-wcag) (34 controles voor docx, xlsx en pptx): titel en taal, contrast, tekstafstand, leesvolgorde en titels van dia's, alt-tekst van grafieken en groepen, tabellen, lijsten, formuliervelden.
 
 - `POST /toegankelijkheid` neemt naast `inhoud` (html) ook `bestand` aan. Met `WCAG_URL` (en `WCAG_DIENSTSLEUTEL`) gaat het bestand naar oa-wcag; zonder blijft alles zoals het was.
 - Samenvoegen: wat de html-controle al vond (en de assistent kan herstellen) telt niet nog eens; titel en taal komen alleen uit het bestand. Regels heten WCAG 2.2 (4.1.1 is daarin vervallen en blijft een advies). Elke bevinding zegt waar zij vandaan komt (`bron`).
