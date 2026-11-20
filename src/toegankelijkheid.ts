@@ -64,6 +64,17 @@ function kort(s: string, n = 40): string {
 }
 
 /** Zelfde element met een andere tag; inhoud en attributen blijven. */
+/** Een regel met het opmaakprofiel Titel (zie TITEL_ATTRIBUUT in het contract). */
+export function isTitel(e: Element): boolean {
+  return e.attrs.some((a) => a.name === "data-oa-stijl" && a.value === "titel");
+}
+
+/** Hetzelfde element als gewone kop 1, zonder de markering van het opmaakprofiel Titel. */
+function zonderTitel(e: Element): string {
+  const kopie: Element = { ...e, tagName: "h1", nodeName: "h1", attrs: e.attrs.filter((a) => a.name !== "data-oa-stijl") };
+  return serializeOuter(kopie);
+}
+
 function metTag(e: Element, tag: string): string {
   const kopie: Element = { ...e, tagName: tag, nodeName: tag };
   return serializeOuter(kopie);
@@ -282,16 +293,19 @@ export function beoordeelHtml(html: string): Bevinding[] {
     }
     vorige = i === 0 ? 1 : Math.min(k.niveau, vorige + 1);
   });
-  if (koppen.filter((k) => k.niveau === 1).length > 1) {
-    const tweede = koppen.filter((k) => k.niveau === 1)[1];
+  // Eén titel per document. Meer dan één kop 1 mag (een kop 1 per hoofdstuk);
+  // dat vraagt de WCAG niet anders. Wel hoort er hoogstens één regel met het
+  // opmaakprofiel Titel te zijn: die wordt de titel in de documenteigenschappen.
+  const titels = koppen.filter((k) => isTitel(k.e));
+  titels.slice(1).forEach((k) => {
     nieuw({
-      ernst: "advies",
-      regel: "WCAG 2.2 1.3.1",
-      melding: "Er is meer dan één kop 1. Gebruik kop 1 alleen voor de titel.",
-      plek: tweede.plek,
-      voorstel: { beschrijving: "Maak hier kop 2 van.", vervanging: metTag(tweede.e, "h2") },
+      ernst: "waarschuwing",
+      regel: "WCAG 2.2 2.4.2",
+      melding: `Er staat meer dan één regel met het opmaakprofiel Titel. Een document heeft één titel; de assistent zet die pas in de documenteigenschappen en de metadata als er één is.`,
+      plek: k.plek,
+      voorstel: { beschrijving: "Maak hier kop 1 van.", vervanging: zonderTitel(k.e) },
     });
-  }
+  });
 
   return bevindingen;
 }

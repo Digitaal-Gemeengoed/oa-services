@@ -1,5 +1,11 @@
 # Wijzigingen
 
+## 0.7.0 — 2026-11-20
+
+- Toegankelijkheid: de regel "meer dan één kop 1" vervalt; een document met meerdere hoofdstukken heeft meerdere koppen 1.
+- Nieuw: meer dan één regel met het opmaakprofiel Titel geeft een waarschuwing (WCAG 2.2, 2.4.2) met het herstel "Maak hier kop 1 van".
+- oa-contract 0.13.0.
+
 ## 0.6.5 — 2026-11-20
 
 - oa-contract 0.12.0.

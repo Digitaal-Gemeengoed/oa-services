@@ -101,3 +101,19 @@ test("rekenblad: standaardnaam, grafiek zonder alt, geen tabelkop-eis", () => {
     assert.equal(beoordeelHtml(`<section data-oa="blad"><h2>${naam}</h2></section>`).length, 1, naam);
   }
 });
+
+test("meer dan één kop 1 mag: een kop 1 per hoofdstuk", () => {
+  const html = '<h1 data-oa-stijl="titel">Gespreksverslag</h1><h1>Aanleiding</h1><p>a</p><h1>Afspraken</h1><p>b</p><h1>Ondertekening</h1>';
+  assert.deepEqual(beoordeelHtml(html), []);
+  assert.deepEqual(beoordeelHtml("<h1>Aanleiding</h1><p>a</p><h1>Afspraken</h1><h2>Wie</h2>"), []);
+});
+
+test("meer dan één regel met opmaakprofiel Titel: waarschuwing per extra titel, herstel naar kop 1", () => {
+  const html = '<h1 data-oa-stijl="titel">Verslag</h1><p>a</p><h1 data-oa-stijl="titel" class="x">Nog een titel</h1><h1 data-oa-stijl="titel">Derde</h1>';
+  const b = beoordeelHtml(html);
+  assert.equal(b.length, 2);
+  assert.ok(b.every((x) => x.ernst === "waarschuwing" && x.regel === "WCAG 2.2 2.4.2"));
+  assert.equal(b[0].plek.pad, "body/2");
+  assert.equal(b[0].voorstel.vervanging, '<h1 class="x">Nog een titel</h1>');
+  assert.equal(b[1].voorstel.vervanging, "<h1>Derde</h1>");
+});
