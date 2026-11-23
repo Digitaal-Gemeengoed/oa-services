@@ -1,5 +1,9 @@
 # Wijzigingen
 
+## 0.7.1 — 2026-11-23
+
+- oa-contract 0.14.0.
+
 ## 0.7.0 — 2026-11-20
 
 - Toegankelijkheid: de regel "meer dan één kop 1" vervalt; een document met meerdere hoofdstukken heeft meerdere koppen 1.
